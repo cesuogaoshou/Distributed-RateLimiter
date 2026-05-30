@@ -40,6 +40,20 @@ Phase 0: 项目初始化。
 - 性能数据必须来自可复现的 JMH 结果。
 - README 和测试是项目交付的一部分。
 
+## 本地开发
+
+运行测试：
+
+```powershell
+mvn test
+```
+
+构建项目：
+
+```powershell
+mvn package
+```
+
 ## 文档
 
 - [项目大纲](PROJECT_OUTLINE.md)
