@@ -18,8 +18,8 @@ public record RateLimiterConfig(
         if (capacity <= 0) {
             throw new RateLimiterConfigException("capacity must be positive");
         }
-        if (ratePerSecond < 0) {
-            throw new RateLimiterConfigException("ratePerSecond must not be negative");
+        if (!Double.isFinite(ratePerSecond) || ratePerSecond < 0) {
+            throw new RateLimiterConfigException("ratePerSecond must be finite and not negative");
         }
         if (window.isZero() || window.isNegative()) {
             throw new RateLimiterConfigException("window must be positive");
