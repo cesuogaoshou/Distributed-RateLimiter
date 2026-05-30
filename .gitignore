@@ -25,6 +25,9 @@ Thumbs.db
 .env.*
 !.env.example
 
+# Local worktrees
+.worktrees/
+
 # Temporary files
 *.tmp
 *.temp
