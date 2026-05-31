@@ -1,33 +1,97 @@
 package com.example.ratelimiter.aop;
 
 import com.example.ratelimiter.annotation.RateLimit;
-import com.example.ratelimiter.config.AlgorithmType;
+import com.example.ratelimiter.core.RateLimiterFactory;
+import com.example.ratelimiter.exception.RateLimitException;
 import org.junit.jupiter.api.Test;
-
-import java.lang.reflect.Method;
+import org.springframework.aop.framework.AopProxyUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.EnableAspectJAutoProxy;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+@SpringBootTest(classes = RateLimitAspectTest.TestConfig.class)
 class RateLimitAspectTest {
 
-    @Test
-    void rateLimitAnnotationExposesExpectedDefaults() throws NoSuchMethodException {
-        Method method = AnnotatedService.class.getDeclaredMethod("limited");
-        RateLimit rateLimit = method.getAnnotation(RateLimit.class);
+    @Autowired
+    private TestService testService;
 
-        assertThat(rateLimit.key()).isEmpty();
-        assertThat(rateLimit.algorithm()).isEqualTo(AlgorithmType.TOKEN_BUCKET);
-        assertThat(rateLimit.capacity()).isEqualTo(100);
-        assertThat(rateLimit.ratePerSecond()).isEqualTo(10.0);
-        assertThat(rateLimit.windowMillis()).isEqualTo(1000);
-        assertThat(rateLimit.permits()).isEqualTo(1);
+    @Test
+    void annotatedMethodAllowsCallsWithinCapacity() {
+        assertThat(testService.limitedTwice()).isEqualTo("limited");
+        assertThat(testService.limitedTwice()).isEqualTo("limited");
     }
 
-    static class AnnotatedService {
+    @Test
+    void annotatedMethodThrowsAfterCapacityIsExhausted() {
+        assertThat(testService.rejectAfterOne()).isEqualTo("first");
 
-        @RateLimit
-        String limited() {
-            return "ok";
+        assertThatThrownBy(() -> testService.rejectAfterOne())
+                .isInstanceOf(RateLimitException.class)
+                .hasMessageContaining("Rate limit exceeded for key: aspect:reject-after-one");
+    }
+
+    @Test
+    void unannotatedMethodIsNotLimited() {
+        assertThat(testService.unlimited()).isEqualTo("unlimited");
+        assertThat(testService.unlimited()).isEqualTo("unlimited");
+        assertThat(testService.unlimited()).isEqualTo("unlimited");
+    }
+
+    @Test
+    void blankKeyUsesClassAndMethodName() {
+        assertThat(testService.defaultKey()).isEqualTo("default");
+
+        Class<?> targetClass = AopProxyUtils.ultimateTargetClass(testService);
+        String expectedKey = targetClass.getName() + "#defaultKey";
+        assertThatThrownBy(() -> testService.defaultKey())
+                .isInstanceOf(RateLimitException.class)
+                .hasMessageContaining(expectedKey);
+    }
+
+    @TestConfiguration
+    @EnableAspectJAutoProxy(proxyTargetClass = true)
+    static class TestConfig {
+
+        @Bean
+        RateLimiterFactory rateLimiterFactory() {
+            return new RateLimiterFactory();
+        }
+
+        @Bean
+        RateLimitAspect rateLimitAspect(RateLimiterFactory rateLimiterFactory) {
+            return new RateLimitAspect(rateLimiterFactory);
+        }
+
+        @Bean
+        TestService testService() {
+            return new TestService();
+        }
+    }
+
+    public static class TestService {
+
+        @RateLimit(key = "aspect:limited-twice", capacity = 2, ratePerSecond = 0.0)
+        public String limitedTwice() {
+            return "limited";
+        }
+
+        @RateLimit(key = "aspect:reject-after-one", capacity = 1, ratePerSecond = 0.0)
+        public String rejectAfterOne() {
+            return "first";
+        }
+
+        public String unlimited() {
+            return "unlimited";
+        }
+
+        @RateLimit(capacity = 1, ratePerSecond = 0.0)
+        public String defaultKey() {
+            return "default";
         }
     }
 }
