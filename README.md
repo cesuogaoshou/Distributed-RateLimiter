@@ -2,7 +2,7 @@
 
 高性能分布式限流中间件项目，目标是系统性实现单机限流、分布式限流、自适应限流、性能基准测试、监控面板和 Spring Boot 接入层。
 
-当前仓库处于 Phase 3 分布式限流阶段，后续工作以 [PROJECT_OUTLINE.md](PROJECT_OUTLINE.md) 为主路线图，以 [Distributed-RateLimiter-Spec.md](Distributed-RateLimiter-Spec.md) 为完整规格参考。
+当前仓库处于 Phase 4 自适应限流阶段，后续工作以 [PROJECT_OUTLINE.md](PROJECT_OUTLINE.md) 为主路线图，以 [Distributed-RateLimiter-Spec.md](Distributed-RateLimiter-Spec.md) 为完整规格参考。
 
 ## 目标技术栈
 
@@ -17,7 +17,7 @@
 
 ## 当前阶段
 
-Phase 3: Redis Lua 分布式限流。
+Phase 4: 自适应限流核心模型和调度器。
 
 已完成：
 
@@ -33,11 +33,12 @@ Phase 3: Redis Lua 分布式限流。
 - 四种单机算法的 JMH 基准测试
 - Redis Lua 分布式令牌桶
 - Redis 健康检查和本地降级策略
+- 自适应限流指标模型、PID 控制器和调度器
 
 下一步：
 
 - 补充 Guava/Sentinel 对比入口
-- 自适应限流调度器
+- 将自适应调度器接入具体限流器和 Spring 定时任务
 
 ## 开发原则
 
@@ -147,6 +148,24 @@ RateLimiter localFallback = new TokenBucketRateLimiter(config.toBuilder()
         .build());
 RateLimiter limiter = new DegradingRateLimiter(distributedLimiter, localFallback, redisHealthChecker);
 ```
+
+## 自适应限流
+
+Phase 4 引入自适应限流核心组件：
+
+- `SystemMetricsCollector` 采集 CPU、堆内存和当前 QPS 快照。
+- `PIDController` 根据目标 CPU 利用率计算限流调整比例。
+- `AdaptiveRateLimiterScheduler` 将调整比例应用到自适应限流器，并按 min/max QPS 边界裁剪。
+
+PID 调整方向：
+
+| 系统状态 | 调整行为 |
+|----------|----------|
+| CPU 低于目标值 | 放宽 QPS |
+| CPU 高于目标值 | 收紧 QPS |
+| 计算结果超过边界 | 限制在 min/max QPS 内 |
+
+当前阶段只提供自适应核心模型和调度器。与具体限流器、Spring 定时任务和配置中心的集成会在后续阶段扩展。
 
 ## 文档
 
