@@ -2,7 +2,7 @@
 
 高性能分布式限流中间件项目，目标是系统性实现单机限流、分布式限流、自适应限流、性能基准测试、监控面板和 Spring Boot 接入层。
 
-当前仓库处于 Phase 4 自适应限流阶段，后续工作以 [PROJECT_OUTLINE.md](PROJECT_OUTLINE.md) 为主路线图，以 [Distributed-RateLimiter-Spec.md](Distributed-RateLimiter-Spec.md) 为完整规格参考。
+当前仓库处于 Phase 5.1 Spring 注解接入阶段，后续工作以 [PROJECT_OUTLINE.md](PROJECT_OUTLINE.md) 为主路线图，以 [Distributed-RateLimiter-Spec.md](Distributed-RateLimiter-Spec.md) 为完整规格参考。
 
 ## 目标技术栈
 
@@ -17,7 +17,7 @@
 
 ## 当前阶段
 
-Phase 4: 自适应限流核心模型和调度器。
+Phase 5.1: Spring `@RateLimit` 注解接入。
 
 已完成：
 
@@ -34,11 +34,13 @@ Phase 4: 自适应限流核心模型和调度器。
 - Redis Lua 分布式令牌桶
 - Redis 健康检查和本地降级策略
 - 自适应限流指标模型、PID 控制器、调度器和本地限流器适配层
+- Spring `@RateLimit` 注解和 AOP 快速失败接入
 
 下一步：
 
+- YAML/properties 规则提供
+- SPI 扩展点
 - 补充 Guava/Sentinel 对比入口
-- 将自适应调度器接入 Spring 定时任务
 
 ## 开发原则
 
@@ -188,6 +190,30 @@ scheduler.adjust(1.0);
 ```
 
 这个阶段仍然不引入 Spring `@Scheduled` 自动任务，避免把核心自适应逻辑和框架生命周期耦合在一起。
+
+## Spring 注解接入
+
+Phase 5.1 引入最小注解式接入方式。业务方法可以通过 `@RateLimit` 使用单机限流器：
+
+```java
+@RateLimit(
+        key = "order:create",
+        algorithm = AlgorithmType.TOKEN_BUCKET,
+        capacity = 100,
+        ratePerSecond = 10.0,
+        windowMillis = 1000,
+        permits = 1
+)
+public void createOrder() {
+    // business logic
+}
+```
+
+当前注解接入范围：
+
+- 仅支持本地限流算法。
+- 被限流时快速失败并抛出 `RateLimitException`。
+- 暂不支持 YAML 规则、SPI 扩展、Redis 分布式模式和自适应模式。
 
 ## 文档
 
