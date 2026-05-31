@@ -33,12 +33,12 @@ Phase 4: 自适应限流核心模型和调度器。
 - 四种单机算法的 JMH 基准测试
 - Redis Lua 分布式令牌桶
 - Redis 健康检查和本地降级策略
-- 自适应限流指标模型、PID 控制器和调度器
+- 自适应限流指标模型、PID 控制器、调度器和本地限流器适配层
 
 下一步：
 
 - 补充 Guava/Sentinel 对比入口
-- 将自适应调度器接入具体限流器和 Spring 定时任务
+- 将自适应调度器接入 Spring 定时任务
 
 ## 开发原则
 
@@ -165,7 +165,29 @@ PID 调整方向：
 | CPU 高于目标值 | 收紧 QPS |
 | 计算结果超过边界 | 限制在 min/max QPS 内 |
 
-当前阶段只提供自适应核心模型和调度器。与具体限流器、Spring 定时任务和配置中心的集成会在后续阶段扩展。
+自适应调度器可以包装现有单机限流器并动态调整 QPS：
+
+```java
+AdaptiveRateLimiterConfig adaptiveConfig = new AdaptiveRateLimiterConfig(
+        AlgorithmType.TOKEN_BUCKET,
+        100,
+        20.0,
+        10.0,
+        80.0,
+        Duration.ofSeconds(1)
+);
+
+ConfigurableAdaptiveRateLimiter limiter = ConfigurableAdaptiveRateLimiter.create(adaptiveConfig);
+AdaptiveRateLimiterScheduler scheduler = new AdaptiveRateLimiterScheduler(
+        new SystemMetricsCollector(() -> (long) limiter.currentQps()),
+        new PIDController(0.60, 1.0, 0.0, 0.0),
+        List.of(limiter)
+);
+
+scheduler.adjust(1.0);
+```
+
+这个阶段仍然不引入 Spring `@Scheduled` 自动任务，避免把核心自适应逻辑和框架生命周期耦合在一起。
 
 ## 文档
 
