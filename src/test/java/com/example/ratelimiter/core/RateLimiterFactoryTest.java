@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class RateLimiterFactoryTest {
 
@@ -46,6 +47,13 @@ class RateLimiterFactoryTest {
         RateLimiter second = factory.getOrCreate("same", config(AlgorithmType.TOKEN_BUCKET));
 
         assertThat(second).isSameAs(first);
+    }
+
+    @Test
+    void rejectsDistributedLimiterWithoutRedisExecutor() {
+        assertThatThrownBy(() -> factory.getOrCreate("distributed", config(AlgorithmType.DISTRIBUTED_TOKEN_BUCKET)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("distributed token bucket requires RedisRateLimiter");
     }
 
     private static RateLimiterConfig config(AlgorithmType algorithm) {

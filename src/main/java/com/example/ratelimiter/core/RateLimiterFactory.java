@@ -26,6 +26,9 @@ public class RateLimiterFactory {
             case LEAKY_BUCKET -> new LeakyBucketRateLimiter(config);
             case FIXED_WINDOW -> new FixedWindowRateLimiter(config);
             case SLIDING_WINDOW -> new SlidingWindowRateLimiter(config);
+            case DISTRIBUTED_TOKEN_BUCKET -> throw new IllegalArgumentException(
+                    "distributed token bucket requires RedisRateLimiter with a RedisCommandExecutor"
+            );
         };
     }
 }

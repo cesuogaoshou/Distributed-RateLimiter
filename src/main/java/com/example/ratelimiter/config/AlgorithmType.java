@@ -4,5 +4,6 @@ public enum AlgorithmType {
     TOKEN_BUCKET,
     LEAKY_BUCKET,
     FIXED_WINDOW,
-    SLIDING_WINDOW
+    SLIDING_WINDOW,
+    DISTRIBUTED_TOKEN_BUCKET
 }
