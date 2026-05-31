@@ -2,7 +2,7 @@
 
 高性能分布式限流中间件项目，目标是系统性实现单机限流、分布式限流、自适应限流、性能基准测试、监控面板和 Spring Boot 接入层。
 
-当前仓库处于 Phase 2 性能基准测试阶段，后续工作以 [PROJECT_OUTLINE.md](PROJECT_OUTLINE.md) 为主路线图，以 [Distributed-RateLimiter-Spec.md](Distributed-RateLimiter-Spec.md) 为完整规格参考。
+当前仓库处于 Phase 3 分布式限流阶段，后续工作以 [PROJECT_OUTLINE.md](PROJECT_OUTLINE.md) 为主路线图，以 [Distributed-RateLimiter-Spec.md](Distributed-RateLimiter-Spec.md) 为完整规格参考。
 
 ## 目标技术栈
 
@@ -17,7 +17,7 @@
 
 ## 当前阶段
 
-Phase 2: JMH 性能基准测试。
+Phase 3: Redis Lua 分布式限流。
 
 已完成：
 
@@ -31,11 +31,13 @@ Phase 2: JMH 性能基准测试。
 - 单元测试和并发测试
 - JMH benchmark profile
 - 四种单机算法的 JMH 基准测试
+- Redis Lua 分布式令牌桶
+- Redis 健康检查和本地降级策略
 
 下一步：
 
 - 补充 Guava/Sentinel 对比入口
-- 设计 Redis Lua 分布式限流
+- 自适应限流调度器
 
 ## 开发原则
 
@@ -113,6 +115,38 @@ java -jar target/benchmarks.jar LocalRateLimiterBenchmark.tokenBucketSingleThrea
 | Sliding Window | 1 / 4 / 8 |
 
 README 中的性能数据必须来自本机实际运行结果，不写虚构数据。后续与 Guava/Sentinel 的对比会单独扩展。
+
+## 分布式限流
+
+Phase 3 引入了基于 Redis Lua 的分布式令牌桶：
+
+- Redis Lua 保证 refill + acquire 的原子性。
+- `RedisRateLimiter` 实现和单机限流器相同的 `RateLimiter` 接口。
+- `DegradingRateLimiter` 在 Redis 不可用或命令失败时降级到本地令牌桶。
+- `RedisHealthChecker` 通过 `PING` 维护 Redis 健康状态。
+
+当前工厂 `RateLimiterFactory` 只创建单机限流器。分布式限流器需要显式传入 `RedisCommandExecutor`：
+
+```java
+RedisCommandExecutor redis = new SpringDataRedisCommandExecutor(stringRedisTemplate);
+RateLimiterConfig config = RateLimiterConfig.builder(AlgorithmType.DISTRIBUTED_TOKEN_BUCKET)
+        .capacity(1000)
+        .ratePerSecond(100.0)
+        .window(Duration.ofSeconds(1))
+        .build();
+
+RateLimiter limiter = new RedisRateLimiter("api:create-order", config, redis);
+```
+
+Redis 故障时可以组合本地降级：
+
+```java
+RateLimiter localFallback = new TokenBucketRateLimiter(config.toBuilder()
+        .capacity(100)
+        .ratePerSecond(10.0)
+        .build());
+RateLimiter limiter = new DegradingRateLimiter(distributedLimiter, localFallback, redisHealthChecker);
+```
 
 ## 文档
 
