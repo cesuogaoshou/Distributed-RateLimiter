@@ -6,6 +6,7 @@ import com.example.ratelimiter.algorithm.SlidingWindowRateLimiter;
 import com.example.ratelimiter.algorithm.TokenBucketRateLimiter;
 import com.example.ratelimiter.config.AlgorithmType;
 import com.example.ratelimiter.config.RateLimiterConfig;
+import com.example.ratelimiter.metrics.RateLimiterMetricsSnapshot;
 import com.example.ratelimiter.spi.RateLimiterAlgorithm;
 import com.example.ratelimiter.spi.RateLimiterAlgorithmRegistry;
 import com.example.ratelimiter.stats.RateLimiterStats;
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -87,6 +89,28 @@ class RateLimiterFactoryTest {
 
         assertThat(customFactory.getOrCreate("token-with-empty-registry", config(AlgorithmType.TOKEN_BUCKET)))
                 .isInstanceOf(TokenBucketRateLimiter.class);
+    }
+
+    @Test
+    void snapshotStatsReturnsStatsForCreatedLimiters() {
+        RateLimiter limiter = factory.getOrCreate("orders", config(AlgorithmType.TOKEN_BUCKET));
+        limiter.tryAcquire();
+
+        Map<String, RateLimiterMetricsSnapshot> snapshots = factory.snapshotStats();
+
+        assertThat(snapshots).containsKey("orders");
+        RateLimiterMetricsSnapshot snapshot = snapshots.get("orders");
+        assertThat(snapshot.key()).isEqualTo("orders");
+        assertThat(snapshot.allowedRequests()).isEqualTo(1);
+        assertThat(snapshot.rejectedRequests()).isZero();
+        assertThat(snapshot.availablePermits()).isGreaterThanOrEqualTo(0);
+    }
+
+    @Test
+    void snapshotStatsReturnsEmptyMapWhenNoLimitersExist() {
+        RateLimiterFactory emptyFactory = new RateLimiterFactory();
+
+        assertThat(emptyFactory.snapshotStats()).isEmpty();
     }
 
     private static RateLimiterConfig config(AlgorithmType algorithm) {

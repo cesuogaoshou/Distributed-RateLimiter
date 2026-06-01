@@ -2,7 +2,7 @@
 
 高性能分布式限流中间件项目，目标是系统性实现单机限流、分布式限流、自适应限流、性能基准测试、监控面板和 Spring Boot 接入层。
 
-当前仓库处于 Phase 6.2 Sentinel 对比 benchmark 阶段，后续工作以 [PROJECT_OUTLINE.md](PROJECT_OUTLINE.md) 为主路线图，以 [Distributed-RateLimiter-Spec.md](Distributed-RateLimiter-Spec.md) 为完整规格参考。
+当前仓库处于 Phase 6.3 监控指标 REST API 阶段，后续工作以 [PROJECT_OUTLINE.md](PROJECT_OUTLINE.md) 为主路线图，以 [Distributed-RateLimiter-Spec.md](Distributed-RateLimiter-Spec.md) 为完整规格参考。
 
 ## 目标技术栈
 
@@ -17,7 +17,7 @@
 
 ## 当前阶段
 
-Phase 6.2: Sentinel 对比 benchmark。
+Phase 6.3: 监控指标 REST API。
 
 已完成：
 
@@ -41,10 +41,11 @@ Phase 6.2: Sentinel 对比 benchmark。
 - Java SPI `RateLimiterAlgorithm` 自定义算法扩展点
 - Guava `RateLimiter` JMH 对比入口
 - Sentinel JMH 对比入口
+- 本进程内限流器统计 REST API
 
 下一步：
 
-- 监控指标和 Dashboard
+- Dashboard 页面
 
 ## 开发原则
 
@@ -152,6 +153,37 @@ java -jar target/benchmarks.jar ComparisonRateLimiterBenchmark.sentinel -wi 1 -i
 ```
 
 这个 benchmark 用于提供本项目 Token Bucket、Guava `RateLimiter` 和 Sentinel 的本地参考对比。Sentinel 是资源和规则模型，benchmark 中测的是 `SphU.entry(resource)` 到 `entry.exit()` 的允许路径调用成本。三者实现语义并不完全相同，README 中不写没有本机实测来源的性能结论。
+
+## 监控指标 REST API
+
+Phase 6.3 增加了本进程内限流器统计快照接口。接口只统计当前 JVM 中通过 `RateLimiterFactory` 创建过的限流器，不做跨实例聚合，也不查询 Redis 全局计数。
+
+启动应用：
+
+```powershell
+mvn spring-boot:run
+```
+
+访问指标：
+
+```powershell
+curl http://localhost:8080/api/ratelimit/stats
+```
+
+返回示例：
+
+```json
+[
+  {
+    "key": "order:create",
+    "allowedRequests": 10,
+    "rejectedRequests": 2,
+    "availablePermits": 88
+  }
+]
+```
+
+如果当前进程还没有通过 `RateLimiterFactory` 创建任何限流器，接口会返回空数组。
 
 ## 分布式限流
 

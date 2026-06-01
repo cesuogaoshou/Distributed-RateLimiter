@@ -5,11 +5,15 @@ import com.example.ratelimiter.algorithm.LeakyBucketRateLimiter;
 import com.example.ratelimiter.algorithm.SlidingWindowRateLimiter;
 import com.example.ratelimiter.algorithm.TokenBucketRateLimiter;
 import com.example.ratelimiter.config.RateLimiterConfig;
+import com.example.ratelimiter.metrics.RateLimiterMetricsSnapshot;
 import com.example.ratelimiter.spi.RateLimiterAlgorithmLoader;
 import com.example.ratelimiter.spi.RateLimiterAlgorithmRegistry;
+import com.example.ratelimiter.stats.RateLimiterStats;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -33,6 +37,20 @@ public class RateLimiterFactory {
         Objects.requireNonNull(key, "key must not be null");
         Objects.requireNonNull(config, "config must not be null");
         return registry.computeIfAbsent(key, ignored -> create(config));
+    }
+
+    public Map<String, RateLimiterMetricsSnapshot> snapshotStats() {
+        Map<String, RateLimiterMetricsSnapshot> snapshots = new HashMap<>();
+        registry.forEach((key, limiter) -> {
+            RateLimiterStats stats = limiter.getStats();
+            snapshots.put(key, new RateLimiterMetricsSnapshot(
+                    key,
+                    stats.allowedRequests(),
+                    stats.rejectedRequests(),
+                    stats.availablePermits()
+            ));
+        });
+        return Collections.unmodifiableMap(snapshots);
     }
 
     private RateLimiter create(RateLimiterConfig config) {
