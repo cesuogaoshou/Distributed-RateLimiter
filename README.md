@@ -2,7 +2,7 @@
 
 高性能分布式限流中间件项目，目标是系统性实现单机限流、分布式限流、自适应限流、性能基准测试、监控面板和 Spring Boot 接入层。
 
-当前仓库处于 Phase 5.2 YAML/properties 规则提供阶段，后续工作以 [PROJECT_OUTLINE.md](PROJECT_OUTLINE.md) 为主路线图，以 [Distributed-RateLimiter-Spec.md](Distributed-RateLimiter-Spec.md) 为完整规格参考。
+当前仓库处于 Phase 5.3 Java SPI 拒绝处理扩展点阶段，后续工作以 [PROJECT_OUTLINE.md](PROJECT_OUTLINE.md) 为主路线图，以 [Distributed-RateLimiter-Spec.md](Distributed-RateLimiter-Spec.md) 为完整规格参考。
 
 ## 目标技术栈
 
@@ -17,7 +17,7 @@
 
 ## 当前阶段
 
-Phase 5.2: YAML/properties 规则提供。
+Phase 5.3: Java SPI 拒绝处理扩展点。
 
 已完成：
 
@@ -36,10 +36,12 @@ Phase 5.2: YAML/properties 规则提供。
 - 自适应限流指标模型、PID 控制器、调度器和本地限流器适配层
 - Spring `@RateLimit` 注解和 AOP 快速失败接入
 - YAML/properties 限流规则绑定和配置优先解析
+- Java SPI `RejectHandler` 拒绝处理扩展点
 
 下一步：
 
-- SPI 扩展点
+- RuleProvider SPI 扩展点
+- RateLimiterAlgorithm SPI 扩展点
 - 补充 Guava/Sentinel 对比入口
 
 ## 开发原则
@@ -247,7 +249,46 @@ public void createOrder() {
 
 - 仅支持本地限流算法。
 - 被限流时快速失败并抛出 `RateLimitException`。
-- 暂不支持 Java SPI、动态刷新、Redis 分布式模式和自适应模式。
+- 暂不支持 RuleProvider SPI、RateLimiterAlgorithm SPI、动态刷新、Redis 分布式模式和自适应模式。
+
+## SPI 扩展点
+
+Phase 5.3 引入第一个 Java SPI 扩展点：`RejectHandler`。默认行为仍然是在限流时抛出 `RateLimitException`。
+
+自定义拒绝处理器：
+
+```java
+public class LoggingRejectHandler implements RejectHandler {
+
+    @Override
+    public void handle(String key, RateLimit rateLimit) {
+        throw new RateLimitException("custom rejected: " + key);
+    }
+
+    @Override
+    public int priority() {
+        return 100;
+    }
+}
+```
+
+注册文件：
+
+```text
+META-INF/services/com.example.ratelimiter.spi.RejectHandler
+```
+
+文件内容：
+
+```text
+com.example.demo.LoggingRejectHandler
+```
+
+当前 SPI 范围：
+
+- 已支持 `RejectHandler`。
+- 多个实现同时存在时，选择 `priority()` 最大的实现。
+- 暂不支持 `RuleProvider` SPI 和 `RateLimiterAlgorithm` SPI。
 
 ## 文档
 
