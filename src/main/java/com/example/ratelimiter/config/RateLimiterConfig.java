@@ -7,14 +7,22 @@ import java.util.Objects;
 
 public record RateLimiterConfig(
         AlgorithmType algorithm,
+        String customAlgorithm,
         long capacity,
         double ratePerSecond,
         Duration window
 ) {
 
     public RateLimiterConfig {
-        Objects.requireNonNull(algorithm, "algorithm must not be null");
         Objects.requireNonNull(window, "window must not be null");
+        if (algorithm == null) {
+            if (customAlgorithm == null || customAlgorithm.isBlank()) {
+                throw new RateLimiterConfigException("customAlgorithm must not be blank");
+            }
+            customAlgorithm = customAlgorithm.trim();
+        } else if (customAlgorithm != null) {
+            throw new RateLimiterConfigException("customAlgorithm must be null for built-in algorithms");
+        }
         if (capacity <= 0) {
             throw new RateLimiterConfigException("capacity must be positive");
         }
@@ -27,11 +35,18 @@ public record RateLimiterConfig(
     }
 
     public static Builder builder(AlgorithmType algorithm) {
-        return new Builder(algorithm);
+        if (algorithm == null) {
+            throw new RateLimiterConfigException("algorithm must not be null");
+        }
+        return new Builder(algorithm, null);
+    }
+
+    public static Builder customAlgorithm(String customAlgorithm) {
+        return new Builder(null, customAlgorithm);
     }
 
     public Builder toBuilder() {
-        return new Builder(algorithm)
+        return new Builder(algorithm, customAlgorithm)
                 .capacity(capacity)
                 .ratePerSecond(ratePerSecond)
                 .window(window);
@@ -39,12 +54,14 @@ public record RateLimiterConfig(
 
     public static final class Builder {
         private final AlgorithmType algorithm;
+        private final String customAlgorithm;
         private long capacity = 100;
         private double ratePerSecond = 10.0;
         private Duration window = Duration.ofSeconds(1);
 
-        private Builder(AlgorithmType algorithm) {
+        private Builder(AlgorithmType algorithm, String customAlgorithm) {
             this.algorithm = algorithm;
+            this.customAlgorithm = customAlgorithm;
         }
 
         public Builder capacity(long capacity) {
@@ -63,7 +80,7 @@ public record RateLimiterConfig(
         }
 
         public RateLimiterConfig build() {
-            return new RateLimiterConfig(algorithm, capacity, ratePerSecond, window);
+            return new RateLimiterConfig(algorithm, customAlgorithm, capacity, ratePerSecond, window);
         }
     }
 }
