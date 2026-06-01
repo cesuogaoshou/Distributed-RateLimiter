@@ -28,6 +28,7 @@ Thumbs.db
 # Local worktrees
 .worktrees/
 .superpowers/
+PROJECT_STUDY_NOTES.md
 
 # Temporary files
 *.tmp
