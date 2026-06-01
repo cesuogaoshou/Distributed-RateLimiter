@@ -6,9 +6,13 @@ import com.example.ratelimiter.algorithm.SlidingWindowRateLimiter;
 import com.example.ratelimiter.algorithm.TokenBucketRateLimiter;
 import com.example.ratelimiter.config.AlgorithmType;
 import com.example.ratelimiter.config.RateLimiterConfig;
+import com.example.ratelimiter.spi.RateLimiterAlgorithm;
+import com.example.ratelimiter.spi.RateLimiterAlgorithmRegistry;
+import com.example.ratelimiter.stats.RateLimiterStats;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -56,11 +60,75 @@ class RateLimiterFactoryTest {
                 .hasMessageContaining("distributed token bucket requires RedisRateLimiter");
     }
 
+    @Test
+    void createsCustomLimiterFromSpiRegistry() {
+        NoopRateLimiter limiter = new NoopRateLimiter();
+        RateLimiterFactory customFactory = new RateLimiterFactory(new RateLimiterAlgorithmRegistry(List.of(
+                new TestAlgorithm("custom", limiter)
+        )));
+
+        RateLimiter created = customFactory.getOrCreate("custom", RateLimiterConfig.customAlgorithm("custom").build());
+
+        assertThat(created).isSameAs(limiter);
+    }
+
+    @Test
+    void rejectsUnknownCustomAlgorithm() {
+        RateLimiterFactory customFactory = new RateLimiterFactory(new RateLimiterAlgorithmRegistry(List.of()));
+
+        assertThatThrownBy(() -> customFactory.getOrCreate("missing", RateLimiterConfig.customAlgorithm("missing").build()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("unknown custom rate limiter algorithm: missing");
+    }
+
+    @Test
+    void builtInAlgorithmsDoNotRequireSpiRegistry() {
+        RateLimiterFactory customFactory = new RateLimiterFactory(new RateLimiterAlgorithmRegistry(List.of()));
+
+        assertThat(customFactory.getOrCreate("token-with-empty-registry", config(AlgorithmType.TOKEN_BUCKET)))
+                .isInstanceOf(TokenBucketRateLimiter.class);
+    }
+
     private static RateLimiterConfig config(AlgorithmType algorithm) {
         return RateLimiterConfig.builder(algorithm)
                 .capacity(10)
                 .ratePerSecond(1.0)
                 .window(Duration.ofSeconds(1))
                 .build();
+    }
+
+    private record TestAlgorithm(String name, RateLimiter limiter) implements RateLimiterAlgorithm {
+
+        @Override
+        public RateLimiter create(RateLimiterConfig config) {
+            return limiter;
+        }
+    }
+
+    private static class NoopRateLimiter implements RateLimiter {
+
+        @Override
+        public boolean tryAcquire() {
+            return true;
+        }
+
+        @Override
+        public boolean tryAcquire(int permits) {
+            return true;
+        }
+
+        @Override
+        public long availablePermits() {
+            return Long.MAX_VALUE;
+        }
+
+        @Override
+        public RateLimiterStats getStats() {
+            return new RateLimiterStats(0, 0, Long.MAX_VALUE);
+        }
+
+        @Override
+        public void updateConfig(RateLimiterConfig config) {
+        }
     }
 }
