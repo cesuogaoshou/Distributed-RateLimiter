@@ -2,7 +2,7 @@
 
 高性能分布式限流中间件项目，目标是系统性实现单机限流、分布式限流、自适应限流、性能基准测试、监控面板和 Spring Boot 接入层。
 
-当前仓库处于 Phase 5.4 RuleProvider SPI 扩展点阶段，后续工作以 [PROJECT_OUTLINE.md](PROJECT_OUTLINE.md) 为主路线图，以 [Distributed-RateLimiter-Spec.md](Distributed-RateLimiter-Spec.md) 为完整规格参考。
+当前仓库处于 Phase 5.5 RateLimiterAlgorithm SPI 扩展点阶段，后续工作以 [PROJECT_OUTLINE.md](PROJECT_OUTLINE.md) 为主路线图，以 [Distributed-RateLimiter-Spec.md](Distributed-RateLimiter-Spec.md) 为完整规格参考。
 
 ## 目标技术栈
 
@@ -17,7 +17,7 @@
 
 ## 当前阶段
 
-Phase 5.4: RuleProvider SPI 扩展点。
+Phase 5.5: RateLimiterAlgorithm SPI 扩展点。
 
 已完成：
 
@@ -38,11 +38,12 @@ Phase 5.4: RuleProvider SPI 扩展点。
 - YAML/properties 限流规则绑定和配置优先解析
 - Java SPI `RejectHandler` 拒绝处理扩展点
 - Java SPI `RuleProvider` 规则提供扩展点
+- Java SPI `RateLimiterAlgorithm` 自定义算法扩展点
 
 下一步：
 
-- RateLimiterAlgorithm SPI 扩展点
 - 补充 Guava/Sentinel 对比入口
+- 监控指标和 Dashboard
 
 ## 开发原则
 
@@ -249,11 +250,11 @@ public void createOrder() {
 
 - 仅支持本地限流算法。
 - 被限流时快速失败并抛出 `RateLimitException`。
-- 暂不支持 RateLimiterAlgorithm SPI、动态刷新、Redis 分布式模式和自适应模式。
+- 暂不支持动态刷新、Redis 分布式模式和自适应模式。
 
 ## SPI 扩展点
 
-Phase 5.3 引入 `RejectHandler`，Phase 5.4 引入 `RuleProvider`。默认拒绝行为仍然是在限流时抛出 `RateLimitException`。
+Phase 5.3 引入 `RejectHandler`，Phase 5.4 引入 `RuleProvider`，Phase 5.5 引入 `RateLimiterAlgorithm`。默认拒绝行为仍然是在限流时抛出 `RateLimitException`。
 
 ### RejectHandler
 
@@ -334,12 +335,64 @@ com.example.demo.CustomRuleProvider
 
 当前 `RuleProvider` SPI 只选择 `priority()` 最大的一个 provider，不合并多个 provider，也不支持动态刷新。
 
+### RateLimiterAlgorithm
+
+`RateLimiterAlgorithm` 可用于从外部 jar 注册自定义限流算法。内置算法继续使用 `AlgorithmType`，自定义算法使用字符串名称，不覆盖内置 enum。
+
+自定义算法：
+
+```java
+public class WarmupRateLimiterAlgorithm implements RateLimiterAlgorithm {
+
+    @Override
+    public String name() {
+        return "warmup";
+    }
+
+    @Override
+    public RateLimiter create(RateLimiterConfig config) {
+        return new WarmupRateLimiter(config);
+    }
+
+    @Override
+    public int priority() {
+        return 100;
+    }
+}
+```
+
+使用自定义算法配置：
+
+```java
+RateLimiterConfig config = RateLimiterConfig.customAlgorithm("warmup")
+        .capacity(100)
+        .ratePerSecond(10.0)
+        .window(Duration.ofSeconds(1))
+        .build();
+RateLimiter limiter = new RateLimiterFactory().getOrCreate("order:create", config);
+```
+
+注册文件：
+
+```text
+META-INF/services/com.example.ratelimiter.spi.RateLimiterAlgorithm
+```
+
+文件内容：
+
+```text
+com.example.demo.WarmupRateLimiterAlgorithm
+```
+
+如果多个自定义算法使用同一个 `name()`，当前会选择 `priority()` 最大的实现。
+
 当前 SPI 范围：
 
 - 已支持 `RejectHandler`。
 - 已支持 `RuleProvider`。
+- 已支持 `RateLimiterAlgorithm`。
 - 多个同类 SPI 实现同时存在时，选择 `priority()` 最大的实现。
-- 暂不支持 `RateLimiterAlgorithm` SPI。
+- 自定义算法不覆盖内置 `AlgorithmType`。
 
 ## 文档
 
