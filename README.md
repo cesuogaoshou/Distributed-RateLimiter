@@ -2,7 +2,7 @@
 
 高性能分布式限流中间件项目，目标是系统性实现单机限流、分布式限流、自适应限流、性能基准测试、监控面板和 Spring Boot 接入层。
 
-当前仓库处于 Phase 5.1 Spring 注解接入阶段，后续工作以 [PROJECT_OUTLINE.md](PROJECT_OUTLINE.md) 为主路线图，以 [Distributed-RateLimiter-Spec.md](Distributed-RateLimiter-Spec.md) 为完整规格参考。
+当前仓库处于 Phase 5.2 YAML/properties 规则提供阶段，后续工作以 [PROJECT_OUTLINE.md](PROJECT_OUTLINE.md) 为主路线图，以 [Distributed-RateLimiter-Spec.md](Distributed-RateLimiter-Spec.md) 为完整规格参考。
 
 ## 目标技术栈
 
@@ -17,7 +17,7 @@
 
 ## 当前阶段
 
-Phase 5.1: Spring `@RateLimit` 注解接入。
+Phase 5.2: YAML/properties 规则提供。
 
 已完成：
 
@@ -35,10 +35,10 @@ Phase 5.1: Spring `@RateLimit` 注解接入。
 - Redis 健康检查和本地降级策略
 - 自适应限流指标模型、PID 控制器、调度器和本地限流器适配层
 - Spring `@RateLimit` 注解和 AOP 快速失败接入
+- YAML/properties 限流规则绑定和配置优先解析
 
 下一步：
 
-- YAML/properties 规则提供
 - SPI 扩展点
 - 补充 Guava/Sentinel 对比入口
 
@@ -209,11 +209,45 @@ public void createOrder() {
 }
 ```
 
+也可以把规则放到 `application.yml` 或 `application.properties`，注解只保留稳定 key：
+
+```yaml
+ratelimiter:
+  rules:
+    order:create:
+      algorithm: TOKEN_BUCKET
+      capacity: 100
+      rate-per-second: 10.0
+      window-millis: 1000
+      permits: 1
+```
+
+```properties
+ratelimiter.rules[order:create].algorithm=TOKEN_BUCKET
+ratelimiter.rules[order:create].capacity=100
+ratelimiter.rules[order:create].rate-per-second=10.0
+ratelimiter.rules[order:create].window-millis=1000
+ratelimiter.rules[order:create].permits=1
+```
+
+```java
+@RateLimit(key = "order:create")
+public void createOrder() {
+    // business logic
+}
+```
+
+规则解析优先级：
+
+1. 如果配置文件中存在同名 key，使用配置文件规则。
+2. 如果不存在同名 key，使用注解参数。
+3. 如果注解 key 为空，使用 `类名#方法名` 作为 key，并同样先查配置文件。
+
 当前注解接入范围：
 
 - 仅支持本地限流算法。
 - 被限流时快速失败并抛出 `RateLimitException`。
-- 暂不支持 YAML 规则、SPI 扩展、Redis 分布式模式和自适应模式。
+- 暂不支持 Java SPI、动态刷新、Redis 分布式模式和自适应模式。
 
 ## 文档
 
