@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RateLimiter Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    <style>
+        :root {
+            color-scheme: light;
+            --bg: #f6f8fb;
+            --surface: #ffffff;
+            --surface-soft: #eef4f8;
+            --border: #d8e0e8;
+            --text: #17202a;
+            --muted: #637083;
+            --blue: #2563eb;
+            --green: #138a52;
+            --red: #c43b3b;
+            --amber: #b7791f;
+            --shadow: 0 10px 24px rgba(22, 34, 51, 0.08);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-width: 320px;
+            background: var(--bg);
+            color: var(--text);
+            font-family: Inter, "Segoe UI", Arial, "Microsoft YaHei", sans-serif;
+            letter-spacing: 0;
+        }
+
+        button {
+            font: inherit;
+        }
+
+        .shell {
+            width: min(1180px, calc(100% - 32px));
+            margin: 0 auto;
+            padding: 24px 0 32px;
+        }
+
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 18px;
+        }
+
+        .title-group {
+            min-width: 0;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 26px;
+            line-height: 1.2;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            margin-top: 6px;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .status-pill {
+            min-height: 36px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            border-radius: 8px;
+            padding: 0 12px;
+            color: var(--muted);
+            font-size: 13px;
+            white-space: nowrap;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--green);
+        }
+
+        .dot.error {
+            background: var(--red);
+        }
+
+        .refresh-button {
+            min-height: 36px;
+            border: 0;
+            border-radius: 8px;
+            padding: 0 14px;
+            background: var(--blue);
+            color: #ffffff;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .refresh-button:disabled {
+            cursor: wait;
+            opacity: 0.72;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 14px;
+            margin-bottom: 16px;
+        }
+
+        .metric {
+            min-height: 112px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--surface);
+            box-shadow: var(--shadow);
+            padding: 16px;
+        }
+
+        .metric-label {
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .metric-value {
+            margin-top: 12px;
+            font-size: 30px;
+            line-height: 1;
+            font-weight: 720;
+            overflow-wrap: anywhere;
+        }
+
+        .metric-note {
+            margin-top: 10px;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .panel-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .panel {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--surface);
+            box-shadow: var(--shadow);
+            min-width: 0;
+        }
+
+        .panel-header {
+            min-height: 54px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .panel-title {
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        .panel-meta {
+            color: var(--muted);
+            font-size: 12px;
+            text-align: right;
+        }
+
+        .chart {
+            height: 330px;
+            min-height: 330px;
+            padding: 8px 10px 14px;
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 680px;
+        }
+
+        th,
+        td {
+            padding: 13px 16px;
+            border-bottom: 1px solid var(--border);
+            text-align: right;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+
+        th:first-child,
+        td:first-child {
+            text-align: left;
+            max-width: 280px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        th {
+            color: var(--muted);
+            background: var(--surface-soft);
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        tr:last-child td {
+            border-bottom: 0;
+        }
+
+        .empty,
+        .error {
+            display: none;
+            margin-bottom: 16px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--surface);
+            padding: 16px;
+            color: var(--muted);
+        }
+
+        .error {
+            border-color: #efb6b6;
+            color: var(--red);
+            background: #fff7f7;
+        }
+
+        @media (max-width: 920px) {
+            .summary-grid,
+            .panel-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        @media (max-width: 680px) {
+            .shell {
+                width: min(100% - 20px, 1180px);
+                padding-top: 16px;
+            }
+
+            .topbar,
+            .actions {
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+            .summary-grid,
+            .panel-grid {
+                grid-template-columns: 1fr;
+            }
+
+            h1 {
+                font-size: 22px;
+            }
+
+            .metric-value {
+                font-size: 26px;
+            }
+
+            .chart {
+                height: 280px;
+                min-height: 280px;
+            }
+        }
+    </style>
+</head>
+<body>
+<main class="shell">
+    <header class="topbar">
+        <div class="title-group">
+            <h1>RateLimiter Dashboard</h1>
+            <div class="subtitle">本进程限流器统计，数据来自 /api/ratelimit/stats</div>
+        </div>
+        <div class="actions">
+            <div class="status-pill" aria-live="polite"><span id="statusDot" class="dot"></span><span id="statusText">等待刷新</span></div>
+            <button id="refreshButton" class="refresh-button" type="button">刷新</button>
+        </div>
+    </header>
+
+    <section class="summary-grid" aria-label="summary">
+        <article class="metric">
+            <div class="metric-label">限流器数量</div>
+            <div id="limiterCount" class="metric-value">0</div>
+            <div class="metric-note">当前 JVM 注册实例</div>
+        </article>
+        <article class="metric">
+            <div class="metric-label">允许请求</div>
+            <div id="allowedTotal" class="metric-value">0</div>
+            <div class="metric-note">累计通过次数</div>
+        </article>
+        <article class="metric">
+            <div class="metric-label">拒绝请求</div>
+            <div id="rejectedTotal" class="metric-value">0</div>
+            <div class="metric-note">累计拒绝次数</div>
+        </article>
+        <article class="metric">
+            <div class="metric-label">拒绝率</div>
+            <div id="rejectRatio" class="metric-value">0%</div>
+            <div class="metric-note">rejected / total</div>
+        </article>
+    </section>
+
+    <div id="emptyState" class="empty">当前还没有限流器统计。触发通过 RateLimiterFactory 创建的限流器后，这里会显示数据。</div>
+    <div id="errorState" class="error"></div>
+
+    <section class="panel-grid">
+        <article class="panel">
+            <div class="panel-header">
+                <div class="panel-title">请求结果</div>
+                <div id="lastUpdated" class="panel-meta">未刷新</div>
+            </div>
+            <div id="requestChart" class="chart"></div>
+        </article>
+        <article class="panel">
+            <div class="panel-header">
+                <div class="panel-title">可用令牌</div>
+                <div class="panel-meta">availablePermits</div>
+            </div>
+            <div id="permitChart" class="chart"></div>
+        </article>
+    </section>
+
+    <section class="panel">
+        <div class="panel-header">
+            <div class="panel-title">限流器列表</div>
+            <div id="rowCount" class="panel-meta">0 条</div>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                <tr>
+                    <th>key</th>
+                    <th>allowedRequests</th>
+                    <th>rejectedRequests</th>
+                    <th>availablePermits</th>
+                    <th>rejectRatio</th>
+                </tr>
+                </thead>
+                <tbody id="statsRows"></tbody>
+            </table>
+        </div>
+    </section>
+</main>
+
+<script>
+    const API_URL = '/api/ratelimit/stats';
+    const refreshButton = document.getElementById('refreshButton');
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const emptyState = document.getElementById('emptyState');
+    const errorState = document.getElementById('errorState');
+    const rows = document.getElementById('statsRows');
+    const chartsEnabled = typeof echarts !== 'undefined';
+    const requestChart = chartsEnabled ? echarts.init(document.getElementById('requestChart')) : null;
+    const permitChart = chartsEnabled ? echarts.init(document.getElementById('permitChart')) : null;
+
+    function formatNumber(value) {
+        return new Intl.NumberFormat('zh-CN').format(value || 0);
+    }
+
+    function formatRatio(rejected, allowed) {
+        const total = rejected + allowed;
+        if (total === 0) {
+            return '0%';
+        }
+        return `${((rejected / total) * 100).toFixed(1)}%`;
+    }
+
+    function setStatus(text, isError) {
+        statusText.textContent = text;
+        statusDot.classList.toggle('error', Boolean(isError));
+    }
+
+    function setSummary(stats) {
+        const allowed = stats.reduce((sum, item) => sum + Number(item.allowedRequests || 0), 0);
+        const rejected = stats.reduce((sum, item) => sum + Number(item.rejectedRequests || 0), 0);
+        document.getElementById('limiterCount').textContent = formatNumber(stats.length);
+        document.getElementById('allowedTotal').textContent = formatNumber(allowed);
+        document.getElementById('rejectedTotal').textContent = formatNumber(rejected);
+        document.getElementById('rejectRatio').textContent = formatRatio(rejected, allowed);
+    }
+
+    function renderTable(stats) {
+        rows.innerHTML = '';
+        stats.forEach((item) => {
+            const allowed = Number(item.allowedRequests || 0);
+            const rejected = Number(item.rejectedRequests || 0);
+            const row = document.createElement('tr');
+            [
+                item.key || '(empty)',
+                formatNumber(allowed),
+                formatNumber(rejected),
+                formatNumber(Number(item.availablePermits || 0)),
+                formatRatio(rejected, allowed)
+            ].forEach((value, index) => {
+                const cell = document.createElement('td');
+                cell.textContent = value;
+                if (index === 0) {
+                    cell.title = item.key || '';
+                }
+                row.appendChild(cell);
+            });
+            rows.appendChild(row);
+        });
+        document.getElementById('rowCount').textContent = `${stats.length} 条`;
+    }
+
+    function renderCharts(stats) {
+        if (!chartsEnabled) {
+            errorState.style.display = 'block';
+            errorState.textContent = 'ECharts 未加载，表格数据仍可查看。';
+            return;
+        }
+
+        const labels = stats.map((item) => item.key || '(empty)');
+        requestChart.setOption({
+            color: ['#138a52', '#c43b3b'],
+            tooltip: { trigger: 'axis' },
+            legend: { top: 4 },
+            grid: { left: 44, right: 18, top: 48, bottom: 58 },
+            xAxis: { type: 'category', data: labels, axisLabel: { interval: 0, rotate: labels.length > 4 ? 28 : 0 } },
+            yAxis: { type: 'value' },
+            series: [
+                { name: 'allowed', type: 'bar', data: stats.map((item) => Number(item.allowedRequests || 0)) },
+                { name: 'rejected', type: 'bar', data: stats.map((item) => Number(item.rejectedRequests || 0)) }
+            ]
+        });
+
+        permitChart.setOption({
+            color: ['#2563eb'],
+            tooltip: { trigger: 'axis' },
+            grid: { left: 44, right: 18, top: 28, bottom: 58 },
+            xAxis: { type: 'category', data: labels, axisLabel: { interval: 0, rotate: labels.length > 4 ? 28 : 0 } },
+            yAxis: { type: 'value' },
+            series: [
+                { name: 'availablePermits', type: 'bar', data: stats.map((item) => Number(item.availablePermits || 0)) }
+            ]
+        });
+    }
+
+    function render(stats) {
+        const normalized = Array.isArray(stats) ? stats : [];
+        setSummary(normalized);
+        renderTable(normalized);
+        renderCharts(normalized);
+        emptyState.style.display = normalized.length === 0 ? 'block' : 'none';
+        document.getElementById('lastUpdated').textContent = new Date().toLocaleString('zh-CN');
+    }
+
+    async function refresh() {
+        refreshButton.disabled = true;
+        setStatus('刷新中', false);
+        errorState.style.display = 'none';
+        try {
+            const response = await fetch(API_URL, { headers: { Accept: 'application/json' } });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            render(await response.json());
+            setStatus('已连接', false);
+        } catch (error) {
+            render([]);
+            errorState.style.display = 'block';
+            errorState.textContent = `读取 ${API_URL} 失败：${error.message}`;
+            setStatus('连接失败', true);
+        } finally {
+            refreshButton.disabled = false;
+        }
+    }
+
+    refreshButton.addEventListener('click', refresh);
+    window.addEventListener('resize', () => {
+        if (requestChart) requestChart.resize();
+        if (permitChart) permitChart.resize();
+    });
+
+    refresh();
+    window.setInterval(refresh, 5000);
+</script>
+</body>
+</html>

@@ -2,7 +2,7 @@
 
 高性能分布式限流中间件项目，目标是系统性实现单机限流、分布式限流、自适应限流、性能基准测试、监控面板和 Spring Boot 接入层。
 
-当前仓库处于 Phase 6.3 监控指标 REST API 阶段，后续工作以 [PROJECT_OUTLINE.md](PROJECT_OUTLINE.md) 为主路线图，以 [Distributed-RateLimiter-Spec.md](Distributed-RateLimiter-Spec.md) 为完整规格参考。
+当前仓库处于 Phase 6.4 Dashboard 页面阶段，后续工作以 [PROJECT_OUTLINE.md](PROJECT_OUTLINE.md) 为主路线图，以 [Distributed-RateLimiter-Spec.md](Distributed-RateLimiter-Spec.md) 为完整规格参考。
 
 ## 目标技术栈
 
@@ -17,7 +17,7 @@
 
 ## 当前阶段
 
-Phase 6.3: 监控指标 REST API。
+Phase 6.4: Dashboard 页面。
 
 已完成：
 
@@ -42,10 +42,11 @@ Phase 6.3: 监控指标 REST API。
 - Guava `RateLimiter` JMH 对比入口
 - Sentinel JMH 对比入口
 - 本进程内限流器统计 REST API
+- 本地监控 Dashboard 页面
 
 下一步：
 
-- Dashboard 页面
+- 开源文档、示例和交付整理
 
 ## 开发原则
 
@@ -184,6 +185,24 @@ curl http://localhost:8080/api/ratelimit/stats
 ```
 
 如果当前进程还没有通过 `RateLimiterFactory` 创建任何限流器，接口会返回空数组。
+
+## 监控 Dashboard
+
+Phase 6.4 增加了本地静态 Dashboard 页面，用于查看当前 JVM 内限流器统计。页面通过浏览器定时读取 `/api/ratelimit/stats`，展示允许请求、拒绝请求、可用令牌和拒绝率。
+
+启动应用：
+
+```powershell
+mvn spring-boot:run
+```
+
+访问页面：
+
+```text
+http://localhost:8080/dashboard.html
+```
+
+如果当前进程还没有通过 `RateLimiterFactory` 创建任何限流器，页面会显示空状态；触发限流器创建并产生请求后，列表和图表会随刷新更新。
 
 ## 分布式限流
 
