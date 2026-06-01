@@ -1,5 +1,11 @@
 package com.example.ratelimiter.benchmark;
 
+import com.alibaba.csp.sentinel.Entry;
+import com.alibaba.csp.sentinel.SphU;
+import com.alibaba.csp.sentinel.slots.block.BlockException;
+import com.alibaba.csp.sentinel.slots.block.RuleConstant;
+import com.alibaba.csp.sentinel.slots.block.flow.FlowRule;
+import com.alibaba.csp.sentinel.slots.block.flow.FlowRuleManager;
 import com.example.ratelimiter.algorithm.TokenBucketRateLimiter;
 import com.example.ratelimiter.config.AlgorithmType;
 import com.example.ratelimiter.config.RateLimiterConfig;
@@ -18,6 +24,7 @@ import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 @BenchmarkMode(Mode.Throughput)
@@ -51,10 +58,23 @@ public class ComparisonRateLimiterBenchmark {
         return state.guavaRateLimiter.tryAcquire();
     }
 
+    @Benchmark
+    @Threads(1)
+    public boolean sentinelSingleThread(BenchmarkState state) {
+        return state.tryAcquireSentinel();
+    }
+
+    @Benchmark
+    @Threads(4)
+    public boolean sentinelFourThreads(BenchmarkState state) {
+        return state.tryAcquireSentinel();
+    }
+
     @State(Scope.Benchmark)
     public static class BenchmarkState {
         private static final long CAPACITY = 100_000_000L;
         private static final double RATE_PER_SECOND = 100_000_000.0;
+        private static final String SENTINEL_RESOURCE = "comparison-token-bucket";
 
         private RateLimiter projectTokenBucket;
         private com.google.common.util.concurrent.RateLimiter guavaRateLimiter;
@@ -67,6 +87,29 @@ public class ComparisonRateLimiterBenchmark {
                     .window(Duration.ofSeconds(1))
                     .build());
             guavaRateLimiter = com.google.common.util.concurrent.RateLimiter.create(RATE_PER_SECOND);
+            configureSentinelRule();
+        }
+
+        public boolean tryAcquireSentinel() {
+            Entry entry = null;
+            try {
+                entry = SphU.entry(SENTINEL_RESOURCE);
+                return true;
+            } catch (BlockException blocked) {
+                return false;
+            } finally {
+                if (entry != null) {
+                    entry.exit();
+                }
+            }
+        }
+
+        private static void configureSentinelRule() {
+            FlowRule rule = new FlowRule();
+            rule.setResource(SENTINEL_RESOURCE);
+            rule.setGrade(RuleConstant.FLOW_GRADE_QPS);
+            rule.setCount(RATE_PER_SECOND);
+            FlowRuleManager.loadRules(List.of(rule));
         }
     }
 }

@@ -2,7 +2,7 @@
 
 高性能分布式限流中间件项目，目标是系统性实现单机限流、分布式限流、自适应限流、性能基准测试、监控面板和 Spring Boot 接入层。
 
-当前仓库处于 Phase 6.1 Guava 对比 benchmark 阶段，后续工作以 [PROJECT_OUTLINE.md](PROJECT_OUTLINE.md) 为主路线图，以 [Distributed-RateLimiter-Spec.md](Distributed-RateLimiter-Spec.md) 为完整规格参考。
+当前仓库处于 Phase 6.2 Sentinel 对比 benchmark 阶段，后续工作以 [PROJECT_OUTLINE.md](PROJECT_OUTLINE.md) 为主路线图，以 [Distributed-RateLimiter-Spec.md](Distributed-RateLimiter-Spec.md) 为完整规格参考。
 
 ## 目标技术栈
 
@@ -17,7 +17,7 @@
 
 ## 当前阶段
 
-Phase 6.1: Guava 对比 benchmark。
+Phase 6.2: Sentinel 对比 benchmark。
 
 已完成：
 
@@ -40,10 +40,10 @@ Phase 6.1: Guava 对比 benchmark。
 - Java SPI `RuleProvider` 规则提供扩展点
 - Java SPI `RateLimiterAlgorithm` 自定义算法扩展点
 - Guava `RateLimiter` JMH 对比入口
+- Sentinel JMH 对比入口
 
 下一步：
 
-- 补充 Sentinel 对比入口
 - 监控指标和 Dashboard
 
 ## 开发原则
@@ -121,11 +121,11 @@ java -jar target/benchmarks.jar LocalRateLimiterBenchmark.tokenBucketSingleThrea
 | Fixed Window | 1 / 4 / 8 |
 | Sliding Window | 1 / 4 / 8 |
 
-README 中的性能数据必须来自本机实际运行结果，不写虚构数据。后续与 Guava/Sentinel 的对比会单独扩展。
+README 中的性能数据必须来自本机实际运行结果，不写虚构数据。后续如果补充 benchmark 数字，需要记录本机环境和运行命令。
 
-## Guava 对比 benchmark
+## Guava / Sentinel 对比 benchmark
 
-Phase 6.1 增加了一个轻量级 Guava 对比入口。Guava 只在 `benchmark` profile 中引入，不会进入普通应用运行依赖。
+Phase 6.1 增加 Guava 对比入口，Phase 6.2 增加 Sentinel 对比入口。Guava 和 Sentinel 都只在 `benchmark` profile 中引入，不会进入普通应用运行依赖。
 
 构建 benchmark jar：
 
@@ -145,7 +145,13 @@ java -jar target/benchmarks.jar ComparisonRateLimiterBenchmark
 java -jar target/benchmarks.jar ComparisonRateLimiterBenchmark -wi 1 -i 1 -f 1
 ```
 
-这个 benchmark 用于提供本项目 Token Bucket 与 Guava `RateLimiter` 的本地参考对比。两者实现语义并不完全相同，README 中不写没有本机实测来源的性能结论。
+只运行 Sentinel 对比 smoke test：
+
+```powershell
+java -jar target/benchmarks.jar ComparisonRateLimiterBenchmark.sentinel -wi 1 -i 1 -f 1
+```
+
+这个 benchmark 用于提供本项目 Token Bucket、Guava `RateLimiter` 和 Sentinel 的本地参考对比。Sentinel 是资源和规则模型，benchmark 中测的是 `SphU.entry(resource)` 到 `entry.exit()` 的允许路径调用成本。三者实现语义并不完全相同，README 中不写没有本机实测来源的性能结论。
 
 ## 分布式限流
 
