@@ -10,6 +10,7 @@ import com.example.ratelimiter.rule.RateLimitRuleProvider;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -26,6 +27,7 @@ public class RateLimitAspect {
         this(rateLimiterFactory, new RateLimitRuleProvider(new RateLimitProperties()));
     }
 
+    @Autowired
     public RateLimitAspect(RateLimiterFactory rateLimiterFactory, RateLimitRuleProvider ruleProvider) {
         this.rateLimiterFactory = Objects.requireNonNull(rateLimiterFactory, "rateLimiterFactory must not be null");
         this.ruleProvider = Objects.requireNonNull(ruleProvider, "ruleProvider must not be null");
