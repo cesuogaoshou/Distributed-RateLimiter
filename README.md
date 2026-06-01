@@ -66,6 +66,14 @@ Open the local dashboard:
 http://localhost:8080/dashboard.html
 ```
 
+Generate demo traffic so the dashboard has data:
+
+```powershell
+curl http://localhost:8080/demo/orders
+curl http://localhost:8080/demo/orders
+curl http://localhost:8080/demo/orders
+```
+
 Read raw metrics:
 
 ```powershell
@@ -279,6 +287,14 @@ curl http://localhost:8080/actuator/metrics/ratelimiter.permits.available
 ```
 
 The REST endpoint and Actuator gauges report limiters created through the current JVM `RateLimiterFactory`. They do not aggregate multiple application instances and do not query Redis global counters.
+
+To create visible demo data, call:
+
+```powershell
+curl http://localhost:8080/demo/orders
+```
+
+This endpoint uses a local token bucket with key `demo:orders`. After a few calls, refresh `/dashboard.html` or read `/api/ratelimit/stats`.
 
 ## Benchmarking
 

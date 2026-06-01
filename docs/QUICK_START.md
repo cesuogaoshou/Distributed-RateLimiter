@@ -48,6 +48,16 @@ http://localhost:8080/dashboard.html
 
 If no limiter has been created through `RateLimiterFactory`, the dashboard shows an empty state. After factory-created limiters process requests, the dashboard shows summary metrics, charts, and a table.
 
+Generate demo traffic:
+
+```powershell
+curl http://localhost:8080/demo/orders
+curl http://localhost:8080/demo/orders
+curl http://localhost:8080/demo/orders
+```
+
+Refresh the dashboard after these calls. It should show the `demo:orders` limiter.
+
 ## 5. Read Metrics API
 
 ```powershell
