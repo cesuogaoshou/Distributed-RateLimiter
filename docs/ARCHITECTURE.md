@@ -27,6 +27,8 @@ flowchart TB
     adaptiveLimiter --> builtin
     stats --> metricsService["RateLimiterMetricsService"]
     metricsService --> metricsApi["GET /api/ratelimit/stats"]
+    metricsService --> meterBinder["RateLimiterMetricsBinder"]
+    meterBinder --> actuator["/actuator/metrics/ratelimiter.*"]
     metricsApi --> dashboard["static /dashboard.html"]
 ```
 
@@ -103,9 +105,10 @@ The monitoring layer currently reports local JVM snapshots:
 
 - `RateLimiterMetricsService` reads snapshots from `RateLimiterFactory`.
 - `RateLimiterMetricsController` exposes `GET /api/ratelimit/stats`.
+- `RateLimiterMetricsBinder` exposes aggregate Micrometer gauges.
 - `dashboard.html` fetches that endpoint and renders summary metrics, ECharts charts, and a limiter table.
 
-The endpoint does not aggregate cluster state and does not query Redis counters.
+The REST endpoint and Actuator gauges do not aggregate cluster state and do not query Redis counters. Actuator metrics are aggregate gauges rather than per-key tagged meters to avoid unbounded meter cardinality.
 
 ## Package Map
 

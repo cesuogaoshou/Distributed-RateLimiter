@@ -69,7 +69,18 @@ Example shape:
 
 The endpoint reports the current JVM only.
 
-## 6. Build Benchmark Jar
+## 6. Read Actuator Metrics
+
+```powershell
+curl http://localhost:8080/actuator/metrics/ratelimiter.limiters
+curl http://localhost:8080/actuator/metrics/ratelimiter.requests.allowed
+curl http://localhost:8080/actuator/metrics/ratelimiter.requests.rejected
+curl http://localhost:8080/actuator/metrics/ratelimiter.permits.available
+```
+
+These are aggregate Micrometer gauges for the current JVM. Per-key details remain in `/api/ratelimit/stats` and the dashboard.
+
+## 7. Build Benchmark Jar
 
 ```powershell
 mvn -Pbenchmark -DskipTests package
@@ -81,7 +92,7 @@ This creates:
 target/benchmarks.jar
 ```
 
-## 7. Run JMH Smoke Benchmarks
+## 8. Run JMH Smoke Benchmarks
 
 Local token bucket smoke test:
 
@@ -103,7 +114,7 @@ java -jar target/benchmarks.jar ComparisonRateLimiterBenchmark.sentinel -wi 1 -i
 
 Use longer warmup and measurement settings before making any performance claim.
 
-## 8. Redis Limiter Notes
+## 9. Redis Limiter Notes
 
 Redis is not required for normal tests. To use `RedisRateLimiter`, provide a `RedisCommandExecutor`, usually through `SpringDataRedisCommandExecutor` with a configured `StringRedisTemplate`.
 

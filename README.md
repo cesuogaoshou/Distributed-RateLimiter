@@ -1,8 +1,8 @@
 # Distributed RateLimiter
 
-高性能分布式限流中间件项目，目标是系统性展示 Java 并发、经典限流算法、Redis Lua 原子限流、自适应限流、Spring Boot 接入、SPI 扩展、JMH 基准测试和本地监控 Dashboard。
+高性能分布式限流中间件项目，目标是系统性展示 Java 并发、经典限流算法、Redis Lua 原子限流、自适应限流、Spring Boot 接入、SPI 扩展、JMH 基准测试、Actuator/Micrometer 监控和本地 Dashboard。
 
-当前阶段：**Phase 7 文档和开源交付整理**。核心功能已经覆盖单机限流、分布式 Redis 限流、自适应限流、注解接入、SPI 扩展、监控 REST API、Dashboard 和 Guava/Sentinel benchmark 对比入口。
+当前阶段：**Phase 8 简历项目强化**。核心功能已经覆盖单机限流、分布式 Redis 限流、自适应限流、注解接入、SPI 扩展、监控 REST API、Actuator/Micrometer 指标、Dashboard 和 Guava/Sentinel benchmark 对比入口。
 
 ## Table of Contents
 
@@ -37,6 +37,7 @@
 | Java SPI | Done | `RejectHandler`, `RuleProvider`, `RateLimiterAlgorithm` |
 | JMH benchmarks | Done | Local algorithm benchmarks plus Guava/Sentinel comparison entries |
 | Metrics REST API | Done | `GET /api/ratelimit/stats` for current JVM factory-created limiters |
+| Actuator/Micrometer | Done | Aggregate gauges under `/actuator/metrics/ratelimiter.*` |
 | Dashboard | Done | Static HTML + ECharts page at `/dashboard.html` |
 
 ## Quick Start
@@ -71,6 +72,15 @@ Read raw metrics:
 curl http://localhost:8080/api/ratelimit/stats
 ```
 
+Read Actuator/Micrometer metrics:
+
+```powershell
+curl http://localhost:8080/actuator/metrics/ratelimiter.limiters
+curl http://localhost:8080/actuator/metrics/ratelimiter.requests.allowed
+curl http://localhost:8080/actuator/metrics/ratelimiter.requests.rejected
+curl http://localhost:8080/actuator/metrics/ratelimiter.permits.available
+```
+
 Build and run a quick JMH smoke benchmark:
 
 ```powershell
@@ -98,6 +108,7 @@ flowchart TB
     redis --> fallback["DegradingRateLimiter"]
     adaptive["Adaptive Scheduler"] --> local
     stats --> metrics["/api/ratelimit/stats"]
+    stats --> actuator["/actuator/metrics/ratelimiter.*"]
     metrics --> dashboard["/dashboard.html"]
 ```
 
@@ -258,7 +269,16 @@ Dashboard:
 http://localhost:8080/dashboard.html
 ```
 
-The endpoint reports limiters created through the current JVM `RateLimiterFactory`. It does not aggregate multiple application instances and does not query Redis global counters.
+Actuator aggregate metrics:
+
+```powershell
+curl http://localhost:8080/actuator/metrics/ratelimiter.limiters
+curl http://localhost:8080/actuator/metrics/ratelimiter.requests.allowed
+curl http://localhost:8080/actuator/metrics/ratelimiter.requests.rejected
+curl http://localhost:8080/actuator/metrics/ratelimiter.permits.available
+```
+
+The REST endpoint and Actuator gauges report limiters created through the current JVM `RateLimiterFactory`. They do not aggregate multiple application instances and do not query Redis global counters.
 
 ## Benchmarking
 
@@ -390,13 +410,13 @@ Custom algorithms use string names through `RateLimiterConfig.customAlgorithm("w
 - Rule providers are loaded through Java SPI and are not dynamically refreshed at runtime.
 - `RuleProvider`, `RejectHandler`, and `RateLimiterAlgorithm` choose the highest `priority()` implementation for conflicts; they do not merge same-type providers.
 - The dashboard is a local static page backed by one JVM's `/api/ratelimit/stats`.
-- Metrics are not cluster-aggregated and do not include Redis global counters.
+- REST metrics and Actuator gauges are not cluster-aggregated and do not include Redis global counters.
+- Actuator metrics are aggregate gauges; per-key metric tags are intentionally avoided to prevent unbounded meter cardinality.
 - Benchmark comparison semantics are not identical across Token Bucket, Guava `RateLimiter`, and Sentinel; results are reference data, not a universal ranking.
 
 ## Roadmap
 
 - Add README screenshots or GIF for the dashboard.
-- Add Micrometer meter export alongside the REST snapshot API.
 - Add optional SSE metrics stream if live browser updates are needed.
 - Add Testcontainers-based Redis integration tests if Docker is available.
 - Add runnable examples under an `examples/` directory.
@@ -406,5 +426,7 @@ Custom algorithms use string names through `RateLimiterConfig.customAlgorithm("w
 
 - [Quick Start](docs/QUICK_START.md)
 - [Architecture Notes](docs/ARCHITECTURE.md)
+- [Interview Notes](docs/INTERVIEW_NOTES.md)
+- [Benchmark Report](docs/BENCHMARK_REPORT.md)
 - [Project Outline](PROJECT_OUTLINE.md)
 - [Full Specification](Distributed-RateLimiter-Spec.md)
