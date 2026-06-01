@@ -6,7 +6,9 @@ import com.example.ratelimiter.exception.RateLimitException;
 import com.example.ratelimiter.rule.RateLimitProperties;
 import com.example.ratelimiter.rule.RateLimitRule;
 import com.example.ratelimiter.rule.RateLimitRuleProvider;
+import com.example.ratelimiter.spi.DefaultRejectHandler;
 import com.example.ratelimiter.spi.RejectHandler;
+import com.example.ratelimiter.spi.RuleProvider;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.Signature;
 import org.junit.jupiter.api.Test;
@@ -20,6 +22,7 @@ import org.springframework.context.annotation.Primary;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -113,6 +116,72 @@ class RateLimitAspectTest {
         verify(joinPoint, times(1)).proceed();
     }
 
+    @Test
+    void spiRuleOverridesConfiguredRuleForSameKey() throws Throwable {
+        RateLimitRule spiRule = onePermitRule();
+        spiRule.setCapacity(2);
+        RuleProvider spiProvider = key -> "aspect:configured-override".equals(key)
+                ? Optional.of(spiRule)
+                : Optional.empty();
+        RateLimitAspect aspect = new RateLimitAspect(
+                new RateLimiterFactory(),
+                new RateLimitRuleProvider(testPropertiesWithConfiguredOverride()),
+                new DefaultRejectHandler(),
+                spiProvider
+        );
+        ProceedingJoinPoint joinPoint = mockJoinPointReturning("configured");
+        RateLimit rateLimit = TestService.class.getMethod("configuredOverride").getAnnotation(RateLimit.class);
+
+        assertThat(aspect.around(joinPoint, rateLimit)).isEqualTo("configured");
+        assertThat(aspect.around(joinPoint, rateLimit)).isEqualTo("configured");
+
+        verify(joinPoint, times(2)).proceed();
+    }
+
+    @Test
+    void configuredRuleStillAppliesWhenSpiProviderMisses() throws Throwable {
+        RuleProvider spiProvider = key -> Optional.empty();
+        RateLimitAspect aspect = new RateLimitAspect(
+                new RateLimiterFactory(),
+                new RateLimitRuleProvider(testPropertiesWithConfiguredOverride()),
+                new DefaultRejectHandler(),
+                spiProvider
+        );
+        ProceedingJoinPoint joinPoint = mockJoinPointReturning("configured");
+        RateLimit rateLimit = TestService.class.getMethod("configuredOverride").getAnnotation(RateLimit.class);
+
+        assertThat(aspect.around(joinPoint, rateLimit)).isEqualTo("configured");
+        assertThatThrownBy(() -> aspect.around(joinPoint, rateLimit))
+                .isInstanceOf(RateLimitException.class)
+                .hasMessageContaining("Rate limit exceeded for key: aspect:configured-override");
+        verify(joinPoint, times(1)).proceed();
+    }
+
+    private static RateLimitProperties testPropertiesWithConfiguredOverride() {
+        RateLimitProperties properties = new RateLimitProperties();
+        Map<String, RateLimitRule> rules = new HashMap<>();
+        rules.put("aspect:configured-override", onePermitRule());
+        properties.setRules(rules);
+        return properties;
+    }
+
+    private static ProceedingJoinPoint mockJoinPointReturning(String result) throws Throwable {
+        ProceedingJoinPoint joinPoint = mock(ProceedingJoinPoint.class);
+        Signature signature = mock(Signature.class);
+        when(joinPoint.getSignature()).thenReturn(signature);
+        when(signature.getDeclaringTypeName()).thenReturn(TestService.class.getName());
+        when(signature.getName()).thenReturn("configuredOverride");
+        when(joinPoint.proceed()).thenReturn(result);
+        return joinPoint;
+    }
+
+    private static RateLimitRule onePermitRule() {
+        RateLimitRule rule = new RateLimitRule();
+        rule.setCapacity(1);
+        rule.setRatePerSecond(0.0);
+        return rule;
+    }
+
     @TestConfiguration
     @EnableAspectJAutoProxy(proxyTargetClass = true)
     static class TestConfig {
@@ -152,12 +221,6 @@ class RateLimitAspectTest {
             return new TestService();
         }
 
-        private static RateLimitRule onePermitRule() {
-            RateLimitRule rule = new RateLimitRule();
-            rule.setCapacity(1);
-            rule.setRatePerSecond(0.0);
-            return rule;
-        }
     }
 
     public static class TestService {
