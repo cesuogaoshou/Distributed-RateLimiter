@@ -2,7 +2,7 @@
 
 高性能分布式限流中间件项目，目标是系统性实现单机限流、分布式限流、自适应限流、性能基准测试、监控面板和 Spring Boot 接入层。
 
-当前仓库处于 Phase 5.3 Java SPI 拒绝处理扩展点阶段，后续工作以 [PROJECT_OUTLINE.md](PROJECT_OUTLINE.md) 为主路线图，以 [Distributed-RateLimiter-Spec.md](Distributed-RateLimiter-Spec.md) 为完整规格参考。
+当前仓库处于 Phase 5.4 RuleProvider SPI 扩展点阶段，后续工作以 [PROJECT_OUTLINE.md](PROJECT_OUTLINE.md) 为主路线图，以 [Distributed-RateLimiter-Spec.md](Distributed-RateLimiter-Spec.md) 为完整规格参考。
 
 ## 目标技术栈
 
@@ -17,7 +17,7 @@
 
 ## 当前阶段
 
-Phase 5.3: Java SPI 拒绝处理扩展点。
+Phase 5.4: RuleProvider SPI 扩展点。
 
 已完成：
 
@@ -37,10 +37,10 @@ Phase 5.3: Java SPI 拒绝处理扩展点。
 - Spring `@RateLimit` 注解和 AOP 快速失败接入
 - YAML/properties 限流规则绑定和配置优先解析
 - Java SPI `RejectHandler` 拒绝处理扩展点
+- Java SPI `RuleProvider` 规则提供扩展点
 
 下一步：
 
-- RuleProvider SPI 扩展点
 - RateLimiterAlgorithm SPI 扩展点
 - 补充 Guava/Sentinel 对比入口
 
@@ -249,11 +249,13 @@ public void createOrder() {
 
 - 仅支持本地限流算法。
 - 被限流时快速失败并抛出 `RateLimitException`。
-- 暂不支持 RuleProvider SPI、RateLimiterAlgorithm SPI、动态刷新、Redis 分布式模式和自适应模式。
+- 暂不支持 RateLimiterAlgorithm SPI、动态刷新、Redis 分布式模式和自适应模式。
 
 ## SPI 扩展点
 
-Phase 5.3 引入第一个 Java SPI 扩展点：`RejectHandler`。默认行为仍然是在限流时抛出 `RateLimitException`。
+Phase 5.3 引入 `RejectHandler`，Phase 5.4 引入 `RuleProvider`。默认拒绝行为仍然是在限流时抛出 `RateLimitException`。
+
+### RejectHandler
 
 自定义拒绝处理器：
 
@@ -284,11 +286,60 @@ META-INF/services/com.example.ratelimiter.spi.RejectHandler
 com.example.demo.LoggingRejectHandler
 ```
 
+### RuleProvider
+
+`RuleProvider` 可用于从外部 jar 提供限流规则。解析优先级是：
+
+1. SPI `RuleProvider`
+2. YAML/properties `RateLimitRuleProvider`
+3. `@RateLimit` 注解参数
+
+自定义规则提供者：
+
+```java
+public class CustomRuleProvider implements RuleProvider {
+
+    @Override
+    public Optional<RateLimitRule> findRule(String key) {
+        if (!"order:create".equals(key)) {
+            return Optional.empty();
+        }
+        RateLimitRule rule = new RateLimitRule();
+        rule.setAlgorithm(AlgorithmType.TOKEN_BUCKET);
+        rule.setCapacity(100);
+        rule.setRatePerSecond(10.0);
+        rule.setWindowMillis(1000);
+        rule.setPermits(1);
+        return Optional.of(rule);
+    }
+
+    @Override
+    public int priority() {
+        return 100;
+    }
+}
+```
+
+注册文件：
+
+```text
+META-INF/services/com.example.ratelimiter.spi.RuleProvider
+```
+
+文件内容：
+
+```text
+com.example.demo.CustomRuleProvider
+```
+
+当前 `RuleProvider` SPI 只选择 `priority()` 最大的一个 provider，不合并多个 provider，也不支持动态刷新。
+
 当前 SPI 范围：
 
 - 已支持 `RejectHandler`。
-- 多个实现同时存在时，选择 `priority()` 最大的实现。
-- 暂不支持 `RuleProvider` SPI 和 `RateLimiterAlgorithm` SPI。
+- 已支持 `RuleProvider`。
+- 多个同类 SPI 实现同时存在时，选择 `priority()` 最大的实现。
+- 暂不支持 `RateLimiterAlgorithm` SPI。
 
 ## 文档
 
