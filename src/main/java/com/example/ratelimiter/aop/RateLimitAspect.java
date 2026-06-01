@@ -4,9 +4,10 @@ import com.example.ratelimiter.annotation.RateLimit;
 import com.example.ratelimiter.config.RateLimiterConfig;
 import com.example.ratelimiter.core.RateLimiter;
 import com.example.ratelimiter.core.RateLimiterFactory;
-import com.example.ratelimiter.exception.RateLimitException;
 import com.example.ratelimiter.rule.RateLimitProperties;
 import com.example.ratelimiter.rule.RateLimitRuleProvider;
+import com.example.ratelimiter.spi.RejectHandler;
+import com.example.ratelimiter.spi.RejectHandlerLoader;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -22,6 +23,7 @@ public class RateLimitAspect {
 
     private final RateLimiterFactory rateLimiterFactory;
     private final RateLimitRuleProvider ruleProvider;
+    private final RejectHandler rejectHandler;
 
     public RateLimitAspect(RateLimiterFactory rateLimiterFactory) {
         this(rateLimiterFactory, new RateLimitRuleProvider(new RateLimitProperties()));
@@ -29,8 +31,16 @@ public class RateLimitAspect {
 
     @Autowired
     public RateLimitAspect(RateLimiterFactory rateLimiterFactory, RateLimitRuleProvider ruleProvider) {
+        this(rateLimiterFactory, ruleProvider, new RejectHandlerLoader().load());
+    }
+
+    public RateLimitAspect(
+            RateLimiterFactory rateLimiterFactory,
+            RateLimitRuleProvider ruleProvider,
+            RejectHandler rejectHandler) {
         this.rateLimiterFactory = Objects.requireNonNull(rateLimiterFactory, "rateLimiterFactory must not be null");
         this.ruleProvider = Objects.requireNonNull(ruleProvider, "ruleProvider must not be null");
+        this.rejectHandler = Objects.requireNonNull(rejectHandler, "rejectHandler must not be null");
     }
 
     @Around("@annotation(rateLimit)")
@@ -39,7 +49,8 @@ public class RateLimitAspect {
         ResolvedRule resolvedRule = resolveRule(key, rateLimit);
         RateLimiter limiter = rateLimiterFactory.getOrCreate(key, resolvedRule.config());
         if (!limiter.tryAcquire(resolvedRule.permits())) {
-            throw new RateLimitException("Rate limit exceeded for key: " + key);
+            rejectHandler.handle(key, rateLimit);
+            return null;
         }
         return joinPoint.proceed();
     }

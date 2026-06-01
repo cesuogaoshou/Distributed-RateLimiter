@@ -6,6 +6,9 @@ import com.example.ratelimiter.exception.RateLimitException;
 import com.example.ratelimiter.rule.RateLimitProperties;
 import com.example.ratelimiter.rule.RateLimitRule;
 import com.example.ratelimiter.rule.RateLimitRuleProvider;
+import com.example.ratelimiter.spi.RejectHandler;
+import org.aspectj.lang.ProceedingJoinPoint;
+import org.aspectj.lang.Signature;
 import org.junit.jupiter.api.Test;
 import org.springframework.aop.framework.AopProxyUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,9 +20,15 @@ import org.springframework.context.annotation.Primary;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest(classes = RateLimitAspectTest.TestConfig.class)
 class RateLimitAspectTest {
@@ -73,6 +82,35 @@ class RateLimitAspectTest {
         assertThatThrownBy(() -> testService.defaultKeyConfigured())
                 .isInstanceOf(RateLimitException.class)
                 .hasMessageContaining(expectedKey);
+    }
+
+    @Test
+    void delegatesRejectedCallToCustomRejectHandler() throws Throwable {
+        AtomicInteger rejectCount = new AtomicInteger();
+        AtomicReference<String> rejectedKey = new AtomicReference<>();
+        RejectHandler rejectHandler = (key, rateLimit) -> {
+            rejectedKey.set(key);
+            rejectCount.incrementAndGet();
+        };
+        RateLimitAspect aspect = new RateLimitAspect(
+                new RateLimiterFactory(),
+                new RateLimitRuleProvider(new RateLimitProperties()),
+                rejectHandler
+        );
+        ProceedingJoinPoint joinPoint = mock(ProceedingJoinPoint.class);
+        Signature signature = mock(Signature.class);
+        when(joinPoint.getSignature()).thenReturn(signature);
+        when(signature.getDeclaringTypeName()).thenReturn(TestService.class.getName());
+        when(signature.getName()).thenReturn("rejectAfterOne");
+        when(joinPoint.proceed()).thenReturn("first");
+        RateLimit rateLimit = TestService.class.getMethod("rejectAfterOne").getAnnotation(RateLimit.class);
+
+        assertThat(aspect.around(joinPoint, rateLimit)).isEqualTo("first");
+        assertThat(aspect.around(joinPoint, rateLimit)).isNull();
+
+        assertThat(rejectedKey.get()).isEqualTo("aspect:reject-after-one");
+        assertThat(rejectCount.get()).isEqualTo(1);
+        verify(joinPoint, times(1)).proceed();
     }
 
     @TestConfiguration
