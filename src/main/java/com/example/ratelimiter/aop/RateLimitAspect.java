@@ -5,6 +5,8 @@ import com.example.ratelimiter.config.RateLimiterConfig;
 import com.example.ratelimiter.core.RateLimiter;
 import com.example.ratelimiter.core.RateLimiterFactory;
 import com.example.ratelimiter.exception.RateLimitException;
+import com.example.ratelimiter.rule.RateLimitProperties;
+import com.example.ratelimiter.rule.RateLimitRuleProvider;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -18,24 +20,40 @@ import java.util.Objects;
 public class RateLimitAspect {
 
     private final RateLimiterFactory rateLimiterFactory;
+    private final RateLimitRuleProvider ruleProvider;
 
     public RateLimitAspect(RateLimiterFactory rateLimiterFactory) {
+        this(rateLimiterFactory, new RateLimitRuleProvider(new RateLimitProperties()));
+    }
+
+    public RateLimitAspect(RateLimiterFactory rateLimiterFactory, RateLimitRuleProvider ruleProvider) {
         this.rateLimiterFactory = Objects.requireNonNull(rateLimiterFactory, "rateLimiterFactory must not be null");
+        this.ruleProvider = Objects.requireNonNull(ruleProvider, "ruleProvider must not be null");
     }
 
     @Around("@annotation(rateLimit)")
     public Object around(ProceedingJoinPoint joinPoint, RateLimit rateLimit) throws Throwable {
         String key = resolveKey(joinPoint, rateLimit);
-        RateLimiterConfig config = RateLimiterConfig.builder(rateLimit.algorithm())
+        ResolvedRule resolvedRule = resolveRule(key, rateLimit);
+        RateLimiter limiter = rateLimiterFactory.getOrCreate(key, resolvedRule.config());
+        if (!limiter.tryAcquire(resolvedRule.permits())) {
+            throw new RateLimitException("Rate limit exceeded for key: " + key);
+        }
+        return joinPoint.proceed();
+    }
+
+    private ResolvedRule resolveRule(String key, RateLimit rateLimit) {
+        return ruleProvider.findRule(key)
+                .map(rule -> new ResolvedRule(rule.toConfig(), rule.getPermits()))
+                .orElseGet(() -> new ResolvedRule(toConfig(rateLimit), rateLimit.permits()));
+    }
+
+    private RateLimiterConfig toConfig(RateLimit rateLimit) {
+        return RateLimiterConfig.builder(rateLimit.algorithm())
                 .capacity(rateLimit.capacity())
                 .ratePerSecond(rateLimit.ratePerSecond())
                 .window(Duration.ofMillis(rateLimit.windowMillis()))
                 .build();
-        RateLimiter limiter = rateLimiterFactory.getOrCreate(key, config);
-        if (!limiter.tryAcquire(rateLimit.permits())) {
-            throw new RateLimitException("Rate limit exceeded for key: " + key);
-        }
-        return joinPoint.proceed();
     }
 
     private String resolveKey(ProceedingJoinPoint joinPoint, RateLimit rateLimit) {
@@ -43,5 +61,8 @@ public class RateLimitAspect {
             return rateLimit.key();
         }
         return joinPoint.getSignature().getDeclaringTypeName() + "#" + joinPoint.getSignature().getName();
+    }
+
+    private record ResolvedRule(RateLimiterConfig config, int permits) {
     }
 }
