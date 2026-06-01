@@ -44,11 +44,11 @@ ratelimiter:
 Properties example:
 
 ```properties
-ratelimiter.rules.order:create.algorithm=TOKEN_BUCKET
-ratelimiter.rules.order:create.capacity=100
-ratelimiter.rules.order:create.rate-per-second=10.0
-ratelimiter.rules.order:create.window-millis=1000
-ratelimiter.rules.order:create.permits=1
+ratelimiter.rules[order:create].algorithm=TOKEN_BUCKET
+ratelimiter.rules[order:create].capacity=100
+ratelimiter.rules[order:create].rate-per-second=10.0
+ratelimiter.rules[order:create].window-millis=1000
+ratelimiter.rules[order:create].permits=1
 ```
 
 ## Resolution Rules
